@@ -7,6 +7,14 @@ pub struct KvStore{
    m_hash: HashMap<String,String>,
 }
 
+impl Default for KvStore {
+    fn default() -> Self {
+       let m_hash = HashMap::new();
+       KvStore{
+           m_hash
+       }
+   }
+}       
 impl KvStore{
    /// Get value of a given key in the KV store.
    ///
@@ -30,10 +38,7 @@ impl KvStore{
    /// let store = KvStore::new();
    /// ```
    pub fn new() -> KvStore {
-       let m_hash = HashMap::new();
-       KvStore{
-           m_hash
-       }
+       KvStore::default()
    }
 
    ///
