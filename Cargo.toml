@@ -3,7 +3,7 @@ name = "kvs"
 version = "0.1.0"
 authors = ["Luis Moreno <morenoluisma@gmail.com>"]
 edition = "2018"
-description = "KV storage CLI"
+description = "KV ruStorage CLI"
 
 [[bin]]
 
