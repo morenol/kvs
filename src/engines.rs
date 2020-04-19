@@ -237,34 +237,40 @@ impl KvsEngine for SledStore {
                 let value = String::from_utf8(s.to_vec());
                 match value {
                     Ok(vl) => Ok(Some(vl)),
-                    _ => Err(Error::from(ErrorKind::UnknownError)),
+                    _ => Err(Error::from(ErrorKind::SledError)),
                 }
             }
             Ok(None) => Ok(None),
-            Err(_) => Err(Error::from(ErrorKind::UnknownError)),
+            Err(_) => Err(Error::from(ErrorKind::SledError)),
         }
     }
 
     fn set(&mut self, key: String, value: String) -> Result<()> {
         let result = self.store.insert(key, value.as_bytes());
         match result {
-            Ok(_) => {
-                self.store.flush();
-                Ok(())
+            Ok(_something) => {
+                let res = self.store.flush();
+                match res {
+                    Ok(_something) => Ok(()),
+                    Err(_err) => Err(Error::from(ErrorKind::SledError)),
+                }
             }
-            Err(_) => Err(Error::from(ErrorKind::UnknownError)),
+            Err(_) => Err(Error::from(ErrorKind::SledError)),
         }
     }
 
     fn remove(&mut self, key: String) -> Result<()> {
         let result = self.store.remove(key);
         match result {
-            Ok(Some(_)) => {
-                self.store.flush();
-                Ok(())
+            Ok(Some(_thing)) => {
+                let res = self.store.flush();
+                match res {
+                    Ok(_something) => Ok(()),
+                    Err(_err) => Err(Error::from(ErrorKind::SledError)),
+                }
             }
             Ok(None) => Err(Error::from(ErrorKind::KeyNotFound)),
-            Err(_) => Err(Error::from(ErrorKind::UnknownError)),
+            Err(_err) => Err(Error::from(ErrorKind::UnknownError)),
         }
     }
 }
