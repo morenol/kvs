@@ -1,0 +1,16 @@
+name: kvs-server
+args:
+    - addr:
+        long: addr
+        value_name: IP-PORT
+        help: Bind server to a given IP address and a port number, with the format IP:PORT
+        takes_value: true
+        default_value: "127.0.0.1:4000"
+    - engine:
+        long: engine
+        value_name: ENGINE-NAME
+        help: Sets server engine. Use 'kvs' or 'sled'.
+        takes_value: true
+
+
+

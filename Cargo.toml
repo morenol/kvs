@@ -7,7 +7,12 @@ description = "KV ruStorage CLI"
 
 [[bin]]
 
-name = 'kvs'
+name = 'kvs-client'
+test = false
+doctest = true
+
+[[bin]]
+name = "kvs-server"
 test = false
 doctest = true
 
@@ -16,10 +21,15 @@ clap = {version = "~2.33.0", features = ["yaml"]}
 failure = "0.1.5"
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0"
+sled = "0.31.0"
+slog = "2.5.2"
+slog-async = "2.5.0"
+slog-term = "2.5.0"
 
 [dev-dependencies]
-assert_cmd = "0.11.0"
+assert_cmd = "0.11"
+criterion = "0.2.11"
 predicates = "1.0.0"
+rand = "0.6.5"
 tempfile = "3.0.7"
 walkdir = "2.2.7"
-
