@@ -224,7 +224,7 @@ impl SledStore {
         let path: PathBuf = path.into();
         let st = sled::Config::new()
             .path(path)
-            .flush_every_ms(Some(0))
+            .flush_every_ms(None)
             .open();
         match st {
             Ok(store) => Ok(SledStore { store }),
