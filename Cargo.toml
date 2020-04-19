@@ -1,6 +1,6 @@
 [package]
 name = "kvs"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Luis Moreno <morenoluisma@gmail.com>"]
 edition = "2018"
 description = "KV ruStorage CLI"
