@@ -8,7 +8,7 @@ extern crate failure;
 #[macro_use]
 extern crate slog;
 
-mod engines;
+pub mod engines;
 pub use engines::KvStore;
 pub use engines::KvsEngine;
 

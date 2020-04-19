@@ -222,10 +222,7 @@ pub struct SledStore {
 impl SledStore {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
         let path: PathBuf = path.into();
-        let st = sled::Config::new()
-            .path(path)
-            .flush_every_ms(None)
-            .open();
+        let st = sled::Config::new().path(path).flush_every_ms(None).open();
         match st {
             Ok(store) => Ok(SledStore { store }),
             Err(_err) => Err(Error::from(ErrorKind::SledError)),
