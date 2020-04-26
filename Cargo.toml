@@ -5,6 +5,9 @@ authors = ["Luis Moreno <morenoluisma@gmail.com>"]
 edition = "2018"
 description = "KV ruStorage CLI"
 
+[lib]
+bench = false
+
 [[bench]]
 name = "sled_v_kvs"
 harness = false
@@ -14,11 +17,13 @@ harness = false
 name = 'kvs-client'
 test = false
 doctest = true
+bench = false
 
 [[bin]]
 name = "kvs-server"
 test = false
 doctest = true
+bench = false
 
 [dependencies]
 clap = {version = "~2.33.0", features = ["yaml"]}
@@ -32,7 +37,7 @@ slog-term = "2.5.0"
 
 [dev-dependencies]
 assert_cmd = "0.11"
-criterion = "0.3"
+criterion = "0.3.2"
 predicates = "1.0.0"
 rand = "0.6.5"
 tempfile = "3.0.7"
