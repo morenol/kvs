@@ -17,7 +17,7 @@ fn set_bench(c: &mut Criterion) {
                     (KvStore::open(temp_dir.path()).unwrap(), temp_dir)
                 },
                 |(mut store, _temp_dir)| {
-                    for i in 1..(1 << 12) {
+                    for i in 1..(1 << 10) {
                         store.set(format!("key{}", i), "value".to_string()).unwrap();
                     }
                 },
@@ -33,7 +33,7 @@ fn set_bench(c: &mut Criterion) {
                 (SledStore::open(temp_dir.path()).unwrap(), temp_dir)
             },
             |(mut db, _temp_dir)| {
-                for i in 1..(1 << 12) {
+                for i in 1..(1 << 9) {
                     db.set(format!("key{}", i), "value".to_string()).unwrap();
                 }
             },
@@ -62,7 +62,7 @@ fn get_bench(c: &mut Criterion) {
                     .unwrap();
             })
         },
-        vec![8, 12, 16, 20],
+        vec![8, 12],
     )
     .with_function("sled", |b, i| {
         let temp_dir = TempDir::new().unwrap();
@@ -75,7 +75,9 @@ fn get_bench(c: &mut Criterion) {
         b.iter(|| {
             db.get(format!("key{}", rng.gen_range(1, 1 << i))).unwrap();
         })
-    });
+    })
+    .sample_size(33);
+
     c.bench("get_bench", bench);
 }
 
