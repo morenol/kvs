@@ -42,9 +42,9 @@ impl KvStore {
         let mut wr = BufWriter::new(&temp_file);
 
         for key in self.m_hash.keys() {
-            let option_value = self.get(key.to_string())?;
+            let option_value = self.get(key.to_owned())?;
             if let Some(value) = option_value {
-                let command = Command::Set(key.to_string(), value);
+                let command = Command::Set(key.to_owned(), value);
                 serde_json::to_writer(&mut wr, &command).unwrap();
                 wr.write_all(b"\n")
                     .map_err(|_err| Error::from(ErrorKind::FileError))?;

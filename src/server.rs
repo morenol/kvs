@@ -91,7 +91,7 @@ fn handle_client(stream: TcpStream, engine: &mut Engine, logger: &Logger) -> Res
                     }
                     Err(ref err) => match err.kind() {
                         ErrorKind::KeyNotFound => {
-                            let val = Value::Error("KeyNotFound".to_string());
+                            let val = Value::Error("KeyNotFound".to_owned());
                             debug!(logger, "Sending {:?}", val);
                             conn.write(&val.encode()).unwrap();
                         }
