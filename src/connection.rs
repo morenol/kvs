@@ -14,13 +14,13 @@ impl Connection {
         let tcp =
             TcpStream::connect(addr).map_err(|_err| Error::from(ErrorKind::ConnectionError))?;
         let buffer = BufReader::new(tcp);
-        Ok(Connection {
+        Ok(Self {
             stream: StreamHandler::new(buffer),
         })
     }
 
     pub fn from_stream(stream: TcpStream) -> Self {
-        Connection {
+        Self {
             stream: StreamHandler::new(BufReader::new(stream)),
         }
     }

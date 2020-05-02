@@ -51,7 +51,7 @@ impl Value {
 
 impl StreamHandler {
     pub fn new(reader: BufReader<TcpStream>) -> Self {
-        StreamHandler { reader }
+        Self { reader }
     }
 
     pub fn decode(&mut self) -> Result<Value> {
