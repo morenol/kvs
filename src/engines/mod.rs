@@ -6,30 +6,34 @@ use std::env;
 use std::fs::{rename, File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
-pub trait KvsEngine {
+pub trait KvsEngine: Clone + Send + 'static {
+    fn set(&self, key: String, value: String) -> Result<()>;
+
     fn get(&self, key: String) -> Result<Option<String>>;
-    fn set(&mut self, key: String, value: String) -> Result<()>;
-    fn remove(&mut self, key: String) -> Result<()>;
+
+    fn remove(&self, key: String) -> Result<()>;
 }
 
 /// Every time this offset threshold is reached in the log file the KvStore will do a log compaction.
-pub const KVS_ODFSET_THRESHOLD: u64 = 1_000_000;
+pub const KVS_ODFSET_THRESHOLD: u64 = 100;
 
 /// Key-Value store structure.
+#[derive(Clone)]
 pub struct KvStore {
     /// A HashMap from the std lib is used to store the key  and the log pointer of each element.
-    m_hash: HashMap<String, u64>,
+    m_hash: Arc<Mutex<HashMap<String, u64>>>,
 
     /// File used to record the set and rm operations.
-    file: File,
+    file: Arc<Mutex<File>>,
 
     path: PathBuf,
 }
 
 impl KvStore {
     // Compact the log file.
-    fn compaction(&mut self) -> Result<()> {
+    fn compaction(&self) -> Result<()> {
         let temp_directory = env::temp_dir();
         let temp_file_name = temp_directory.join(".kvs.log");
 
@@ -40,8 +44,8 @@ impl KvStore {
             .open(&temp_file_name)
             .map_err(|_err| Error::from(ErrorKind::FileError))?;
         let mut wr = BufWriter::new(&temp_file);
-
-        for key in self.m_hash.keys() {
+        let _file = self.file.lock().unwrap();
+        for key in self.m_hash.lock().unwrap().keys() {
             let option_value = self.get(key.to_owned())?;
             if let Some(value) = option_value {
                 let command = Command::Set(key.to_owned(), value);
@@ -57,7 +61,8 @@ impl KvStore {
 
     // Initialize internal HashMap with the contents of the log file.
     fn init(&mut self) -> Result<()> {
-        let mut reader = BufReader::new(&self.file);
+        let file = &*self.file.lock().unwrap();
+        let mut reader = BufReader::new(file);
 
         loop {
             let position = reader
@@ -73,8 +78,8 @@ impl KvStore {
                 let command: Command = serde_json::from_str(&line[..])
                     .map_err(|_err| Error::from(ErrorKind::ParsingError))?;
                 match command {
-                    Command::Rm(key) => self.m_hash.remove(&key),
-                    Command::Set(key, _value) => self.m_hash.insert(key, position),
+                    Command::Rm(key) => self.m_hash.lock().unwrap().remove(&key),
+                    Command::Set(key, _value) => self.m_hash.lock().unwrap().insert(key, position),
                     _ => panic!("error"),
                 };
             } else {
@@ -86,14 +91,16 @@ impl KvStore {
 
     /// Assert if a key exists in the Key Value Storage.
     fn exists(&self, key: String) -> bool {
-        match self.m_hash.get(&key) {
+        match self.m_hash.lock().unwrap().get(&key) {
             Some(_s) => true,
             None => false,
         }
     }
 
-    fn log(&mut self, command: &Command) -> Result<u64> {
-        let mut wr = BufWriter::new(&self.file);
+    fn log(&self, command: &Command) -> Result<u64> {
+        let file = &*self.file.lock().unwrap();
+
+        let mut wr = BufWriter::new(file);
         let position = wr
             .seek(SeekFrom::End(0))
             .map_err(|_err| Error::from(ErrorKind::FileError))?;
@@ -123,7 +130,8 @@ impl KvStore {
             .open(&path)
             .map_err(|_err| Error::from(ErrorKind::FileError))?;
 
-        let m_hash = HashMap::new();
+        let file = Arc::new(Mutex::new(file));
+        let m_hash = Arc::new(Mutex::new(HashMap::new()));
 
         let mut storage = KvStore { m_hash, file, path };
 
@@ -145,10 +153,11 @@ impl KvsEngine for KvStore {
     ///# Ok::<(), Error>(())
     ///```
     fn get(&self, key: String) -> Result<Option<String>> {
-        let stored = self.m_hash.get(&key);
-        match stored {
+        //        let stored = self.m_hash.lock().unwrap().get(&key);
+        match self.m_hash.lock().unwrap().get(&key) {
             Some(&position) => {
-                let mut reader = BufReader::new(&self.file);
+                let file = &*self.file.lock().unwrap();
+                let mut reader = BufReader::new(file);
                 let mut line = String::new();
                 reader
                     .seek(SeekFrom::Start(position))
@@ -160,7 +169,7 @@ impl KvsEngine for KvStore {
                     .map_err(|_err| Error::from(ErrorKind::ParsingError))?;
                 let value = match command {
                     Command::Set(_key, value) => value,
-                    _ => panic!("Invalid state"),
+                    _ => return Err(Error::from(ErrorKind::InvalidData)),
                 };
 
                 Ok(Some(value))
@@ -180,14 +189,15 @@ impl KvsEngine for KvStore {
     /// assert_eq!(value, "value1");
     ///# Ok::<(), Error>(())
     /// ```
-    fn set(&mut self, key: String, value: String) -> Result<()> {
+    fn set(&self, key: String, value: String) -> Result<()> {
         let command = Command::Set(key.clone(), value);
         let position = self.log(&command)?;
-        self.m_hash.insert(key, position);
-
-        if position > KVS_ODFSET_THRESHOLD {
-            self.compaction()?;
+        {
+            self.m_hash.lock().unwrap().insert(key, position);
         }
+        //if position > KVS_ODFSET_THRESHOLD {
+        //    self.compaction()?;
+        //}
         Ok(())
     }
 
@@ -204,11 +214,13 @@ impl KvsEngine for KvStore {
     /// assert_eq!(missing, None);
     ///# Ok::<(), Error>(())
     /// ```
-    fn remove(&mut self, key: String) -> Result<()> {
+    fn remove(&self, key: String) -> Result<()> {
         let command = Command::Rm(key.clone());
         if self.exists(key.clone()) {
             self.log(&command)?;
-            self.m_hash.remove(&key);
+            {
+                self.m_hash.lock().unwrap().remove(&key);
+            }
             Ok(())
         } else {
             Err(Error::from(ErrorKind::KeyNotFound))
@@ -216,6 +228,7 @@ impl KvsEngine for KvStore {
     }
 }
 
+#[derive(Clone)]
 pub struct SledStore {
     store: Db,
 }
@@ -245,7 +258,7 @@ impl KvsEngine for SledStore {
         }
     }
 
-    fn set(&mut self, key: String, value: String) -> Result<()> {
+    fn set(&self, key: String, value: String) -> Result<()> {
         let result = self.store.insert(key, value.as_bytes());
         match result {
             Ok(_something) => {
@@ -259,7 +272,7 @@ impl KvsEngine for SledStore {
         }
     }
 
-    fn remove(&mut self, key: String) -> Result<()> {
+    fn remove(&self, key: String) -> Result<()> {
         let result = self.store.remove(key);
         match result {
             Ok(Some(_thing)) => {
@@ -275,6 +288,7 @@ impl KvsEngine for SledStore {
     }
 }
 
+#[derive(Clone)]
 pub enum Engine {
     KvsEngine(KvStore),
     SledKvsEngine(SledStore),
@@ -288,14 +302,14 @@ impl KvsEngine for Engine {
         }
     }
 
-    fn set(&mut self, key: String, value: String) -> Result<()> {
+    fn set(&self, key: String, value: String) -> Result<()> {
         match self {
             Engine::KvsEngine(engine) => engine.set(key, value),
             Engine::SledKvsEngine(engine) => engine.set(key, value),
         }
     }
 
-    fn remove(&mut self, key: String) -> Result<()> {
+    fn remove(&self, key: String) -> Result<()> {
         match self {
             Engine::KvsEngine(engine) => engine.remove(key),
             Engine::SledKvsEngine(engine) => engine.remove(key),
@@ -304,7 +318,7 @@ impl KvsEngine for Engine {
 }
 
 impl Engine {
-    pub fn exec_command(&mut self, command: Command) -> Result<Option<String>> {
+    pub fn exec_command(&self, command: Command) -> Result<Option<String>> {
         match command {
             Command::Rm(key) => {
                 self.remove(key)?;

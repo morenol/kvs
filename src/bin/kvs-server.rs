@@ -10,6 +10,7 @@ extern crate slog;
 extern crate slog_async;
 extern crate slog_term;
 use crate::slog::{Drain, Logger};
+use kvs::thread_pool::{SharedQueueThreadPool, ThreadPool};
 
 fn main() -> Result<()> {
     let decorator = slog_term::PlainDecorator::new(std::io::stderr());
@@ -40,8 +41,8 @@ fn main() -> Result<()> {
             "Engine not defined in the parameters, using current engine."
         ),
     }
-
-    let mut server = KvsServer::new(addr, engine, _log)?;
+    let pool = SharedQueueThreadPool::new(5)?;
+    let mut server = KvsServer::new(addr, engine, pool, _log)?;
     server.listen_and_serve()?;
 
     Ok(())

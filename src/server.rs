@@ -6,18 +6,21 @@ use std::path::Path;
 use crate::connection::Connection;
 use crate::engines::{Engine, KvStore, SledStore};
 use crate::protocol::Value;
+use crate::thread_pool::*;
 use slog::Logger;
 
-pub struct KvsServer {
+pub struct KvsServer<TP: ThreadPool> {
     listener: TcpListener,
     engine: Engine,
+    pool: TP,
     logger: Logger,
 }
 
-impl KvsServer {
+impl<TP: ThreadPool> KvsServer<TP> {
     pub fn new<A: ToSocketAddrs, L: Into<slog::Logger>>(
         addr: A,
         eng: Option<&str>,
+        pool: TP,
         logger: L,
     ) -> Result<Self> {
         let engine;
@@ -59,19 +62,27 @@ impl KvsServer {
             listener,
             engine,
             logger,
+            pool,
         })
     }
 
     pub fn listen_and_serve(&mut self) -> Result<()> {
         for stream in self.listener.incoming() {
             let client = stream.map_err(|_err| Error::from(ErrorKind::ConnectionError))?;
-            handle_client(client, &mut self.engine, &self.logger)?;
+            let engine = self.engine.clone();
+            let logger = self.logger.clone();
+            self.pool.spawn(move || {
+                match handle_client(client, engine, &logger) {
+                    Ok(_) => (),
+                    Err(_err) => info!(logger, "There was a problem."),
+                };
+            });
         }
         Ok(())
     }
 }
 
-fn handle_client(stream: TcpStream, engine: &mut Engine, logger: &Logger) -> Result<()> {
+fn handle_client(stream: TcpStream, engine: Engine, logger: &Logger) -> Result<()> {
     let mut conn = Connection::from_stream(stream);
     debug!(logger, "Handling new client");
     while match conn.read() {
