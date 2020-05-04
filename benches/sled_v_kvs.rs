@@ -2,7 +2,6 @@
 extern crate criterion;
 
 use criterion::BenchmarkId;
-use criterion::Throughput;
 
 use criterion::{BatchSize, Criterion, ParameterizedBenchmark};
 use kvs::client::create_client;
@@ -13,6 +12,9 @@ use kvs::thread_pool::{SharedQueueThreadPool, ThreadPool};
 #[macro_use]
 extern crate slog;
 use kvs::protocol::Value;
+
+use std::net::TcpListener;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use slog::{Discard, Logger};
 
@@ -94,54 +96,9 @@ fn get_bench(c: &mut Criterion) {
     c.bench("get_bench", bench);
 }
 
-fn write_queued_kvstore(c: &mut Criterion) {
-    let mut group = c.benchmark_group("w_sharedkvs");
-    for threads in [1, 2, 4, 8].iter() {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(threads),
-            threads,
-            |b, &threads| {
-                let s = threads as u32;
-                let pool = SharedQueueThreadPool::new(s).unwrap();
-                let addr = format!("127.0.0.1:4000{}", s);
-                let drain = Discard;
-                let _log = Logger::root(drain, o!());
-                let temp_dir = TempDir::new().unwrap();
-
-                let engine = KvStore::open(temp_dir.path()).unwrap();
-                let mut server = KvsServer::new(&addr[..], engine, pool, _log).unwrap();
-
-                std::thread::spawn(move || {
-                    server.listen_and_serve().unwrap();
-                });
-
-                let mut client = create_client(&addr[..]).unwrap();
-
-                b.iter(|| {
-                    for key_i in 1..1000 {
-                        client
-                            .send_cmd(Command::Set(format!("key{}", key_i), "value".to_string()))
-                            .unwrap();
-                    }
-                    for key_i in 1..1000 {
-                        match client
-                            .send_cmd(Command::Get(format!("key{}", key_i)))
-                            .unwrap()
-                        {
-                            Value::String(result) => assert_eq!(result, "value"),
-                            _ => assert_eq!(1, 0),
-                        }
-                    }
-                });
-            },
-        );
-    }
-    group.finish();
-}
-
 fn read_queued_kvstore(c: &mut Criterion) {
     let mut group = c.benchmark_group("w_sharedkvs");
-    for threads in [1, 2, 4, 8].iter() {
+    for threads in [1, 2, 4].iter() {
         group
             .bench_with_input(
                 BenchmarkId::from_parameter(threads),
@@ -149,16 +106,21 @@ fn read_queued_kvstore(c: &mut Criterion) {
                 |b, &threads| {
                     let s = threads as u32;
                     let pool = SharedQueueThreadPool::new(s).unwrap();
-                    let addr = format!("127.0.0.1:4002{}", s);
                     let _log = Logger::root(Discard, o!());
                     let temp_dir = TempDir::new().unwrap();
 
                     let engine = KvStore::open(temp_dir.path()).unwrap();
-                    let mut server = KvsServer::new(&addr[..], engine, pool, _log).unwrap();
+                    let find_available_port = || {
+                        (8000..9000).find(|port| TcpListener::bind(("127.0.0.1", *port)).is_ok())
+                    };
+                    let port = find_available_port().unwrap();
+                    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+                    let mut server = KvsServer::new(addr, engine, pool, _log).unwrap();
+
                     std::thread::spawn(move || {
                         server.listen_and_serve().unwrap();
                     });
-                    let mut client = create_client(&addr[..]).unwrap();
+                    let mut client = create_client(addr).unwrap();
                     for key_i in 1..1000 {
                         client
                             .send_cmd(Command::Set(format!("key{}", key_i), "value".to_string()))
@@ -176,11 +138,73 @@ fn read_queued_kvstore(c: &mut Criterion) {
                         }
                     });
                 },
-            );
+            )
+            .sample_size(50);
     }
 
     group.finish();
 }
 
-criterion_group!(benches, set_bench, get_bench, write_queued_kvstore, read_queued_kvstore);
+fn write_queued_kvstore(c: &mut Criterion) {
+    let mut group = c.benchmark_group("r_sharedkvs");
+    for threads in [1, 2, 4].iter() {
+        group
+            .bench_with_input(
+                BenchmarkId::from_parameter(threads),
+                threads,
+                |b, &threads| {
+                    let s = threads as u32;
+                    let pool = SharedQueueThreadPool::new(s).unwrap();
+                    let drain = Discard;
+                    let _log = Logger::root(drain, o!());
+                    let temp_dir = TempDir::new().unwrap();
+
+                    let find_available_port = || {
+                        (8000..9000).find(|port| TcpListener::bind(("127.0.0.1", *port)).is_ok())
+                    };
+
+                    let port = find_available_port().unwrap();
+                    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+
+                    let engine = KvStore::open(temp_dir.path()).unwrap();
+                    let mut server = KvsServer::new(addr, engine, pool, _log).unwrap();
+
+                    std::thread::spawn(move || {
+                        server.listen_and_serve().unwrap();
+                    });
+
+                    let mut client = create_client(addr).unwrap();
+
+                    b.iter(|| {
+                        for key_i in 1..1000 {
+                            client
+                                .send_cmd(Command::Set(
+                                    format!("key{}", key_i),
+                                    "value".to_string(),
+                                ))
+                                .unwrap();
+                        }
+                        for key_i in 1..1000 {
+                            match client
+                                .send_cmd(Command::Get(format!("key{}", key_i)))
+                                .unwrap()
+                            {
+                                Value::String(result) => assert_eq!(result, "value"),
+                                _ => assert_eq!(1, 0),
+                            }
+                        }
+                    });
+                },
+            )
+            .sample_size(50);
+    }
+    group.finish();
+}
+criterion_group!(
+    benches,
+    set_bench,
+    get_bench,
+    write_queued_kvstore,
+    read_queued_kvstore
+);
 criterion_main!(benches);
