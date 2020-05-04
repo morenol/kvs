@@ -12,6 +12,10 @@ bench = false
 name = "sled_v_kvs"
 harness = false
 
+[[bench]]
+name = "thread"
+harness = false
+
 [[bin]]
 
 name = 'kvs-client'
