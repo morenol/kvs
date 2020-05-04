@@ -5,7 +5,7 @@ use crate::command::Command;
 use crate::connection::Connection;
 use crate::protocol::Value;
 
-pub fn create_client(address: &str) -> Result<KvsClient> {
+pub fn create_client<A: ToSocketAddrs>(address: A) -> Result<KvsClient> {
     let client = KvsClient::new(address).map_err(|_err| Error::from(ErrorKind::ConnectionError))?;
     Ok(client)
 }
@@ -22,8 +22,12 @@ impl KvsClient {
 
     pub fn send_cmd(&mut self, command: Command) -> Result<Value> {
         let value = Value::Command(command);
-        self.conn.write(&value.encode()).unwrap();
-        self.conn.read()
+        self.send(&value.encode()).unwrap();
+        self.read()
+    }
+
+    pub fn send(&mut self, value: &[u8]) -> Result<()> {
+        self.conn.write(value)
     }
 
     pub fn read(&mut self) -> Result<Value> {
