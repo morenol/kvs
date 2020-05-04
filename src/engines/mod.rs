@@ -14,6 +14,20 @@ pub trait KvsEngine: Clone + Send + 'static {
     fn get(&self, key: String) -> Result<Option<String>>;
 
     fn remove(&self, key: String) -> Result<()>;
+
+    fn exec_command(&self, command: Command) -> Result<Option<String>> {
+        match command {
+            Command::Rm(key) => {
+                self.remove(key)?;
+                Ok(None)
+            }
+            Command::Set(key, value) => {
+                self.set(key, value)?;
+                Ok(None)
+            }
+            Command::Get(key) => self.get(key),
+        }
+    }
 }
 
 /// Every time this offset threshold is reached in the log file the KvStore will do a log compaction.
@@ -284,51 +298,6 @@ impl KvsEngine for SledStore {
             }
             Ok(None) => Err(Error::from(ErrorKind::KeyNotFound)),
             Err(_err) => Err(Error::from(ErrorKind::UnknownError)),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub enum Engine {
-    KvsEngine(KvStore),
-    SledKvsEngine(SledStore),
-}
-
-impl KvsEngine for Engine {
-    fn get(&self, key: String) -> Result<Option<String>> {
-        match self {
-            Engine::KvsEngine(engine) => engine.get(key),
-            Engine::SledKvsEngine(engine) => engine.get(key),
-        }
-    }
-
-    fn set(&self, key: String, value: String) -> Result<()> {
-        match self {
-            Engine::KvsEngine(engine) => engine.set(key, value),
-            Engine::SledKvsEngine(engine) => engine.set(key, value),
-        }
-    }
-
-    fn remove(&self, key: String) -> Result<()> {
-        match self {
-            Engine::KvsEngine(engine) => engine.remove(key),
-            Engine::SledKvsEngine(engine) => engine.remove(key),
-        }
-    }
-}
-
-impl Engine {
-    pub fn exec_command(&self, command: Command) -> Result<Option<String>> {
-        match command {
-            Command::Rm(key) => {
-                self.remove(key)?;
-                Ok(None)
-            }
-            Command::Set(key, value) => {
-                self.set(key, value)?;
-                Ok(None)
-            }
-            Command::Get(key) => self.get(key),
         }
     }
 }
