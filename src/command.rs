@@ -26,9 +26,9 @@ impl FromStr for Command {
     fn from_str(s: &str) -> Result<Self> {
         let words = s.split_whitespace().collect::<Vec<_>>();
         match words[0] {
-            "GET" => Ok(Command::Get(words[1].to_string())),
-            "SET" => Ok(Command::Set(words[1].to_string(), words[2].to_string())),
-            "RM" => Ok(Command::Rm(words[1].to_string())),
+            "GET" => Ok(Command::Get(words[1].to_owned())),
+            "SET" => Ok(Command::Set(words[1].to_owned(), words[2].to_owned())),
+            "RM" => Ok(Command::Rm(words[1].to_owned())),
             _ => Err(Error::from(ErrorKind::InvalidCommand)),
         }
     }

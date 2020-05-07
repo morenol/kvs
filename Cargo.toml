@@ -9,7 +9,11 @@ description = "KV ruStorage CLI"
 bench = false
 
 [[bench]]
-name = "sled_v_kvs"
+name = "engines"
+harness = false
+
+[[bench]]
+name = "thread"
 harness = false
 
 [[bin]]
@@ -28,6 +32,7 @@ bench = false
 [dependencies]
 clap = {version = "~2.33.0", features = ["yaml"]}
 failure = "0.1.5"
+rayon = "1.3.0"
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0"
 sled = "0.31.0"
@@ -38,8 +43,11 @@ slog-term = "2.5.0"
 [dev-dependencies]
 assert_cmd = "0.11"
 criterion = "0.3.2"
+crossbeam-utils = "0.6.5"
 predicates = "1.0.0"
 rand = "0.6.5"
 tempfile = "3.0.7"
 walkdir = "2.2.7"
 sled = { version = "0.31.0", features = ["testing"] }
+panic-control = "0.1.4"
+

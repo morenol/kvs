@@ -2,8 +2,6 @@ name: Benchmark
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [master]
 jobs:
   Benchmark:
     runs-on: ubuntu-latest

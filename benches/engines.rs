@@ -3,6 +3,7 @@ extern crate criterion;
 
 use criterion::{BatchSize, Criterion, ParameterizedBenchmark};
 use kvs::engines::{KvStore, KvsEngine, SledStore};
+
 use rand::prelude::*;
 use std::iter;
 use tempfile::TempDir;
@@ -16,8 +17,8 @@ fn set_bench(c: &mut Criterion) {
                     let temp_dir = TempDir::new().unwrap();
                     (KvStore::open(temp_dir.path()).unwrap(), temp_dir)
                 },
-                |(mut store, _temp_dir)| {
-                    for i in 1..(1 << 10) {
+                |(store, _temp_dir)| {
+                    for i in 1..(1 << 8) {
                         store.set(format!("key{}", i), "value".to_string()).unwrap();
                     }
                 },
@@ -32,8 +33,8 @@ fn set_bench(c: &mut Criterion) {
                 let temp_dir = TempDir::new().unwrap();
                 (SledStore::open(temp_dir.path()).unwrap(), temp_dir)
             },
-            |(mut db, _temp_dir)| {
-                for i in 1..(1 << 9) {
+            |(db, _temp_dir)| {
+                for i in 1..(1 << 8) {
                     db.set(format!("key{}", i), "value".to_string()).unwrap();
                 }
             },
@@ -49,7 +50,7 @@ fn get_bench(c: &mut Criterion) {
         "kvs",
         |b, i| {
             let temp_dir = TempDir::new().unwrap();
-            let mut store = KvStore::open(temp_dir.path()).unwrap();
+            let store = KvStore::open(temp_dir.path()).unwrap();
             for key_i in 1..(1 << i) {
                 store
                     .set(format!("key{}", key_i), "value".to_string())
@@ -66,7 +67,7 @@ fn get_bench(c: &mut Criterion) {
     )
     .with_function("sled", |b, i| {
         let temp_dir = TempDir::new().unwrap();
-        let mut db = SledStore::open(temp_dir.path()).unwrap();
+        let db = SledStore::open(temp_dir.path()).unwrap();
         for key_i in 1..(1 << i) {
             db.set(format!("key{}", key_i), "value".to_string())
                 .unwrap();
@@ -81,5 +82,5 @@ fn get_bench(c: &mut Criterion) {
     c.bench("get_bench", bench);
 }
 
-criterion_group!(benches, set_bench, get_bench);
+criterion_group!(benches, set_bench, get_bench,);
 criterion_main!(benches);
