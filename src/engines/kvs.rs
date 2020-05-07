@@ -8,7 +8,7 @@ use std::env;
 use std::fs::{rename, File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 /// Every time this offset threshold is reached in the log file the KvStore will do a log compaction.
 pub const KVS_ODFSET_THRESHOLD: u64 = 100;
@@ -17,17 +17,17 @@ pub const KVS_ODFSET_THRESHOLD: u64 = 100;
 #[derive(Clone)]
 pub struct KvStore {
     /// A HashMap from the std lib is used to store the key  and the log pointer of each element.
-    m_hash: Arc<Mutex<HashMap<String, u64>>>,
+    index: Arc<RwLock<HashMap<String, u64>>>,
 
-    /// File used to record the set and rm operations.
-    file: Arc<Mutex<File>>,
+    reader: Arc<RwLock<BufReader<File>>>,
+    writer: Arc<Mutex<BufWriter<File>>>,
 
     path: PathBuf,
 }
 
 impl KvStore {
     // Compact the log file.
-    fn compaction(&self) -> Result<()> {
+    /* fn compaction(&self) -> Result<()> {
         let temp_directory = env::temp_dir();
         let temp_file_name = temp_directory.join(".kvs.log");
 
@@ -39,7 +39,7 @@ impl KvStore {
             .map_err(|_err| Error::from(ErrorKind::FileError))?;
         let mut wr = BufWriter::new(&temp_file);
         let _file = self.file.lock().unwrap();
-        for key in self.m_hash.lock().unwrap().keys() {
+        for key in self.index.lock().unwrap().keys() {
             let option_value = self.get(key.to_owned())?;
             if let Some(value) = option_value {
                 let command = Command::Set(key.to_owned(), value);
@@ -51,20 +51,23 @@ impl KvStore {
         rename(temp_file_name, &self.path).map_err(|_err| Error::from(ErrorKind::FileError))?;
 
         Ok(())
-    }
+    }*/
 
     // Initialize internal HashMap with the contents of the log file.
     fn init(&mut self) -> Result<()> {
-        let file = &*self.file.lock().unwrap();
-        let mut reader = BufReader::new(file);
-
         loop {
-            let position = reader
+            let position = self
+                .reader
+                .write()
+                .unwrap()
                 .seek(SeekFrom::Current(0))
                 .map_err(|_err| Error::from(ErrorKind::FileError))?;
 
             let mut line = String::new();
-            let lize_size = reader
+            let lize_size = self
+                .reader
+                .write()
+                .unwrap()
                 .read_line(&mut line)
                 .map_err(|_err| Error::from(ErrorKind::FileError))?;
 
@@ -72,8 +75,8 @@ impl KvStore {
                 let command: Command = serde_json::from_str(&line[..])
                     .map_err(|_err| Error::from(ErrorKind::ParsingError))?;
                 match command {
-                    Command::Rm(key) => self.m_hash.lock().unwrap().remove(&key),
-                    Command::Set(key, _value) => self.m_hash.lock().unwrap().insert(key, position),
+                    Command::Rm(key) => self.index.write().unwrap().remove(&key),
+                    Command::Set(key, _value) => self.index.write().unwrap().insert(key, position),
                     _ => panic!("error"),
                 };
             } else {
@@ -85,22 +88,24 @@ impl KvStore {
 
     /// Assert if a key exists in the Key Value Storage.
     fn exists(&self, key: String) -> bool {
-        match self.m_hash.lock().unwrap().get(&key) {
+        match self.index.read().unwrap().get(&key) {
             Some(_s) => true,
             None => false,
         }
     }
 
     fn log(&self, command: &Command) -> Result<u64> {
-        let file = &*self.file.lock().unwrap();
-
-        let mut wr = BufWriter::new(file);
-        let position = wr
-            .seek(SeekFrom::End(0))
+        let position = self
+            .writer
+            .lock()
+            .unwrap()
+            .seek(SeekFrom::Current(0))
             .map_err(|_err| Error::from(ErrorKind::FileError))?;
-        serde_json::to_writer(&mut wr, &command).unwrap();
+        let mut wr = self.writer.lock().unwrap();
+        serde_json::to_writer(&mut *wr, &command).unwrap();
         wr.write_all(b"\n")
             .map_err(|_err| Error::from(ErrorKind::FileError))?;
+        wr.flush().unwrap();
         Ok(position)
     }
 
@@ -124,10 +129,23 @@ impl KvStore {
             .open(&path)
             .map_err(|_err| Error::from(ErrorKind::FileError))?;
 
-        let file = Arc::new(Mutex::new(file));
-        let m_hash = Arc::new(Mutex::new(HashMap::new()));
+        let reader = Arc::new(RwLock::new(BufReader::new(file)));
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .map_err(|_err| Error::from(ErrorKind::FileError))?;
+        let mut writer = BufWriter::new(file);
+        writer.seek(SeekFrom::End(0)).unwrap();
+        let writer = Arc::new(Mutex::new(writer));
+        let index = Arc::new(RwLock::new(HashMap::new()));
 
-        let mut storage = KvStore { m_hash, file, path };
+        let mut storage = KvStore {
+            index,
+            reader,
+            writer,
+            path,
+        };
 
         storage.init()?;
 
@@ -147,16 +165,17 @@ impl KvsEngine for KvStore {
     ///# Ok::<(), Error>(())
     ///```
     fn get(&self, key: String) -> Result<Option<String>> {
-        //        let stored = self.m_hash.lock().unwrap().get(&key);
-        match self.m_hash.lock().unwrap().get(&key) {
+        match self.index.read().unwrap().get(&key) {
             Some(&position) => {
-                let file = &*self.file.lock().unwrap();
-                let mut reader = BufReader::new(file);
                 let mut line = String::new();
-                reader
+                self.reader
+                    .write()
+                    .unwrap()
                     .seek(SeekFrom::Start(position))
                     .map_err(|_err| Error::from(ErrorKind::FileError))?;
-                reader
+                self.reader
+                    .write()
+                    .unwrap()
                     .read_line(&mut line)
                     .map_err(|_err| Error::from(ErrorKind::FileError))?;
                 let command: Command = serde_json::from_str(&line[..])
@@ -187,7 +206,7 @@ impl KvsEngine for KvStore {
         let command = Command::Set(key.clone(), value);
         let position = self.log(&command)?;
         {
-            self.m_hash.lock().unwrap().insert(key, position);
+            self.index.write().unwrap().insert(key, position);
         }
         //if position > KVS_ODFSET_THRESHOLD {
         //    self.compaction()?;
@@ -213,7 +232,7 @@ impl KvsEngine for KvStore {
         if self.exists(key.clone()) {
             self.log(&command)?;
             {
-                self.m_hash.lock().unwrap().remove(&key);
+                self.index.write().unwrap().remove(&key);
             }
             Ok(())
         } else {

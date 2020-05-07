@@ -2,7 +2,6 @@ use crate::error::{Error, ErrorKind, Result};
 use std::net::ToSocketAddrs;
 use std::net::{TcpListener, TcpStream};
 
-use crate::command::Command;
 use crate::connection::Connection;
 use crate::engines::KvsEngine;
 use crate::protocol::Value;
