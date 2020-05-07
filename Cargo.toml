@@ -9,7 +9,7 @@ description = "KV ruStorage CLI"
 bench = false
 
 [[bench]]
-name = "sled_v_kvs"
+name = "engines"
 harness = false
 
 [[bench]]

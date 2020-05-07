@@ -1,8 +1,6 @@
-
 #[macro_use]
 extern crate slog;
 use slog::{Discard, Logger};
-
 
 #[macro_use]
 extern crate criterion;
