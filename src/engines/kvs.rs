@@ -31,21 +31,22 @@ pub struct KvStore {
 
 impl KvStore {
     // Compact the log file.
-     fn compaction(&self) -> Result<()> {
+    fn compaction(&self) -> Result<()> {
         let temp_directory = env::temp_dir();
         let temp_file_name = temp_directory.join(".kvs.log");
-
+        let mut new_index = HashMap::new();
         let temp_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .open(&temp_file_name)
             .map_err(|_err| Error::from(ErrorKind::FileError))?;
-        let mut wr = BufWriter::new(temp_file); 
+        let mut wr = BufWriter::new(temp_file);
 
         let mut lock = self.writer.lock().unwrap();
 
         for key in self.index.read().unwrap().keys() {
+            let position = wr.seek(SeekFrom::Current(0)).unwrap();
             let option_value = self.get(key.to_owned())?;
             if let Some(value) = option_value {
                 let command = Command::Set(key.to_owned(), value);
@@ -53,11 +54,24 @@ impl KvStore {
                 wr.write_all(b"\n")
                     .map_err(|_err| Error::from(ErrorKind::FileError))?;
             }
+            new_index.insert(key.to_owned(), position);
         }
         wr.flush().unwrap();
 
-        self.uncompacted.store(0, Ordering::SeqCst);
-        rename(temp_file_name, &self.path).map_err(|_err| Error::from(ErrorKind::FileError))?;
+        {
+            let mut r = self.reader.write().unwrap();
+            rename(temp_file_name, &self.path).map_err(|_err| Error::from(ErrorKind::FileError))?;
+            let mut index = self.index.write().unwrap();
+            self.uncompacted.store(0, Ordering::SeqCst);
+            *index = new_index;
+            let file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&self.path)
+                .map_err(|_err| Error::from(ErrorKind::FileError))?;
+            let reader = BufReader::new(file);
+            *r = reader;
+        }
 
         let file = OpenOptions::new()
             .read(true)

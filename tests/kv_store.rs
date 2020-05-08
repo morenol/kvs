@@ -113,7 +113,10 @@ fn compaction() -> Result<()> {
             continue;
         }
         // Compaction triggered
-
+        for key_id in 0..1000 {
+            let key = format!("key{}", key_id);
+            assert_eq!(store.get(key)?, Some(format!("{}", iter)));
+        }
         drop(store);
         // reopen and check content
         let store = KvStore::open(temp_dir.path())?;
