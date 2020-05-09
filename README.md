@@ -2,10 +2,10 @@
 
 Key-Value ruStorage
 
-  Implementation of a Key-Value storage is rust following the rust course from [talent plan](https://github.com/pingcap/talent-plan/).
+  Implementation of a Key-Value storage in rust following the rust course from [talent plan](https://github.com/pingcap/talent-plan/).
   
  ## Note
- This project was done with the intention to learn rust. Do not use it if you have other intentions.
+ This project was done with the intention of learn rust. Do not use it if you have other plans.
   
  ## Usage
  
