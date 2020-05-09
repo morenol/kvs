@@ -57,7 +57,7 @@ SUBCOMMANDS:
     set  <KEY> <VALUE>  Sets a value for a given key.
 ```
 
-## Documentation:
+## How it works:
   
  This will get some love in the future.
   
