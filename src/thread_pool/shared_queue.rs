@@ -30,14 +30,20 @@ impl ThreadPool for SharedQueueThreadPool {
     where
         F: FnOnce() + Send + 'static,
     {
-        self.tx.send(ThreadPoolMessage::Run(Box::new(job)));
+        match self.tx.send(ThreadPoolMessage::Run(Box::new(job))) {
+            Ok(_ok) => {}
+            Err(_err) => {}
+        };
     }
 }
 
 impl Drop for SharedQueueThreadPool {
     fn drop(&mut self) {
         for _ in 0..self.workers_size {
-            self.tx.send(ThreadPoolMessage::Shutdown);
+            match self.tx.send(ThreadPoolMessage::Shutdown) {
+                Ok(_ok) => {}
+                Err(_err) => break,
+            };
         }
     }
 }
